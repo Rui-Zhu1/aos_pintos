@@ -16,6 +16,15 @@
 
 /* Keyboard control register port. */
 #define CONTROL_REG 0x64
+#define KBRD_INTRFC 0x64
+#define KBRD_BIT_KDATA 0
+#define KBRD_BIT_UDATA 1
+ 
+#define KBRD_IO 0x60
+#define KBRD_RESET 0xFE
+ 
+#define bit(n) (1<<(n))
+#define check_flag(flags, n) ((flags) & bit(n))
 
 /* How to shut down when shutdown() is called. */
 static enum shutdown_type how = SHUTDOWN_NONE;
@@ -51,6 +60,18 @@ void shutdown_configure (enum shutdown_type type) { how = type; }
 void shutdown_reboot (void)
 {
   printf ("Rebooting...\n");
+  uint8_t temp;
+ 
+    asm volatile ("cli");
+ 
+    do
+    {
+        temp = inb(KBRD_INTRFC);
+        if (check_flag(temp, KBRD_BIT_KDATA) != 0)
+            inb(KBRD_IO);
+    } while (check_flag(temp, KBRD_BIT_UDATA) != 0);
+ 
+    outb(KBRD_INTRFC, KBRD_RESET); 
 
   /* See [kbd] for details on how to program the keyboard
    * controller. */
@@ -107,7 +128,7 @@ void shutdown_power_off (void)
    * so there is no way to exit cleanly.  We use 0x31 which should
    * result in a qemu exit code of 0x63.  */
   outb (0x501, 0x31);
-
+  shutdown_reboot();
   /* This will power off a VMware VM if "gui.exitOnCLIHLT = TRUE"
      is set in its configuration file.  (The "pintos" script does
      that automatically.)  */
